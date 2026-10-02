@@ -1,0 +1,53 @@
+# ===== 环境与密钥（不要提交） =====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== 运行产物 / 日志 =====
+nohup.out
+*.log
+uploads/
+generates/
+
+# ===== 大文件 / 压缩包 =====
+*.tgz
+*.tar.gz
+*.zip
+
+# ===== 模型权重（GitHub 单文件 >100MB 会拒绝推送） =====
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+# 若需保留小体积示例权重，可对单文件取消忽略，例如：
+# !path/to/small_demo.pth
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== Android（子项目 CXRMSamples 另有 .gitignore，这里补根目录常见项） =====
+local.properties
+*.iml
+.gradle/
+.cxx/

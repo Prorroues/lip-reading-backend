@@ -1,0 +1,17 @@
+默启未来 —— 唇语识别后端
+========================
+
+本软件包含以下第三方开源组件的代码（修改后使用）：
+
+1. Visual_Speech_Recognition_for_Multiple_Languages
+   Copyright (c) 2023 Imperial College London (Pingchuan Ma et al.)
+   Licensed under the Apache License 2.0
+   来源: https://github.com/mpc001/Visual_Speech_Recognition_for_Multiple_Languages
+   修改: 适配中文 CMLR 模型实时推理、MediaPipe 检测、家居指令闭集解码（pipelines/command_decode.py）等
+
+2. MiVOLO (Multi-input Transformer for Age and Gender Estimation)
+   来源: https://github.com/WildChlamydia/MiVOLO
+   许可证见 MiVOLO/license/ 目录（en_us.pdf / ru.pdf）
+   注意: MiVOLO 权重仅供研究/学习使用，商用前请查阅其许可证
+
+3. 本项目整体按 Apache License 2.0 发布（见 LICENSE）。

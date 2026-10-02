@@ -1,0 +1,1 @@
+{'config_filename': 'configs/CMLR_V_WER8.0.ini', 'data_dir': None, 'data_filename': '../uploads/videos/2025349949.mp4', 'data_ext': '.mp4', 'landmarks_dir': None, 'landmarks_filename': None, 'landmarks_ext': '.pkl', 'labels_filename': None, 'detector': 'mediapipe', 'dst_filename': None, 'gpu_idx': 0, 'output_subdir': None}
