@@ -5,7 +5,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $releaseUrl = "https://github.com/Prorroues/lip-reading-backend/releases/download/v1.0.0/models-v1.0.zip"
 $zipPath = Join-Path $repoRoot "models-v1.0.zip"
 
-Write-Host "==> 下载模型权重包 (约 240MB)..."
+Write-Host "==> 下载模型权重包 (约 600MB)..."
 Write-Host "    $releaseUrl"
 Invoke-WebRequest -Uri $releaseUrl -OutFile $zipPath -UseBasicParsing
 
@@ -22,3 +22,4 @@ Write-Host "==> 完成。模型已就位："
 Write-Host "    Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/models/CMLR_V_WER8.0/"
 Write-Host "    Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/language_models/lm_zh/"
 Write-Host "    MiVOLO/models/"
+

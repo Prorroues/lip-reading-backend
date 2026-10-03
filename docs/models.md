@@ -14,9 +14,9 @@ powershell -File scripts/download_models.ps1
 
 | 文件 | 用途 | 大小 |
 |---|---|---|
-| `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/models/CMLR_V_WER8.0/model.pth` | CMLR 中文唇语识别模型 | ~50MB |
+| `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/models/CMLR_V_WER8.0/model.pth` | CMLR 中文唇语识别模型 | ~210MB |
 | `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/models/CMLR_V_WER8.0/model.json` | 模型配置 | 极小 |
-| `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/language_models/lm_zh/model.pth` | 中文语言模型 | ~100MB |
+| `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/language_models/lm_zh/model.pth` | 中文语言模型 | ~201MB |
 | `Visual_Speech_Recognition_for_Multiple_Languages/benchmarks/CMLR/language_models/lm_zh/model.json` | 语言模型配置 | 极小 |
 | `MiVOLO/models/mivolo_imbd.pth.tar` | 年龄性别估计 | ~105MB |
 | `MiVOLO/models/yolov8x_person_face.pt` | 人脸/人体检测器 | ~130MB |
@@ -33,3 +33,4 @@ powershell -File scripts/download_models.ps1
 
 - VSR 代码与模型：Apache-2.0
 - MiVOLO：仅供研究/学习用途，商用前请查阅 `MiVOLO/license/` 中的许可证文本
+
