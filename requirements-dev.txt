@@ -1,0 +1,2 @@
+# 开发/测试依赖（运行后端本身不需要）：pip install -r requirements-dev.txt
+pytest>=8.0

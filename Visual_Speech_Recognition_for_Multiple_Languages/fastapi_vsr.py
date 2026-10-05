@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 from .pipelines.pipeline import InferencePipeline
 
@@ -29,10 +30,13 @@ class VSRInference:
         )
 
     def process_videos(self, video_path, detector="mediapipe"):
-        try:
-            data = self.vsr.forward(video_path)
-            if data is None or (isinstance(data, str) and not str(data).strip()):
-                return "唇语识别结果为空"
-            return data
-        except Exception as e:
-            return f"唇语识别失败: {e}"
+        """识别视频中的唇语。
+
+        返回识别文本；没有识别到内容返回空字符串；
+        识别失败抛异常（由调用方决定如何处理，不再把错误文本塞进结果里）。
+        """
+        data = self.vsr.forward(video_path)
+        if data is None:
+            return ""
+        text = str(data).strip()
+        return text

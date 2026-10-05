@@ -1,6 +1,16 @@
+# -*- coding: utf-8 -*-
+import logging
+
 import cv2
 import mediapipe as mp
 import numpy as np
+
+logger = logging.getLogger("backend.lip_video")
+
+# TODO(优化): 本类与 VSR pipeline 的 mediapipe detector 对同一视频各跑了一遍
+# 人脸关键点，存在约 30%~50% 的重复计算。后续应抽一个公共的关键点提取步骤，
+# 把结果（pkl）同时喂给 LipVideo 和 VSR pipeline（上游 InferencePipeline 支持
+# 传入 landmarks）。改动涉及 VSR pipeline 内部，需在带模型的环境验证后再做。
 
 
 class LipVideo:
@@ -13,8 +23,8 @@ class LipVideo:
                     min_detection_confidence=0.5,
                     min_tracking_confidence=0.5)
         self.lips = [61, 291, 17]
-        self.desired_pos=np.float32([[10, 20], [90, 20], [45, 50]])
-        self.out_size=(90, 50)
+        self.desired_pos = np.float32([[10, 20], [90, 20], [45, 50]])
+        self.out_size = (90, 50)
         self.lip_index_list_outer = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
         self.lip_index_list_inner = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95]
         self.fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -40,17 +50,23 @@ class LipVideo:
 
     def save_video(self, frame_list, save_path, fps, h, w):
         out = cv2.VideoWriter(save_path, self.fourcc, fps, (w, h))
-        for img in frame_list:
-            out.write(img)
-        out.release()
+        try:
+            for img in frame_list:
+                out.write(img)
+        finally:
+            out.release()
 
     def infer(self, file_path, save_path):
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            raise ValueError(f"无法打开视频文件: {file_path}")
         try:
-            cap = cv2.VideoCapture(file_path)
             shape = (int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)))
-            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            fps = int(cap.get(cv2.CAP_PROP_FPS)) or 25
             lip_frame_list = []
             h, w = shape
+            n_outer = len(self.lip_index_list_outer)
+            n_inner = len(self.lip_index_list_inner)
             while True:
                 ret, frame = cap.read()
                 if ret is False:
@@ -61,15 +77,21 @@ class LipVideo:
                     lip_series = self.get_matrix(results.multi_face_landmarks[0], shape)
                     matrix = frame.copy()
                     for i in range(len(lip_series)):
-                        if i <= len(self.lip_index_list_outer):
+                        if i < n_outer:
+                            # 外唇：连接到下一个外唇点（首尾闭合）
                             cv2.circle(matrix, lip_series[i], 5, (255, 0, 0), -1)
-                            cv2.line(matrix, lip_series[i], lip_series[(i + 1) % len(self.lip_index_list_outer)],
+                            cv2.line(matrix, lip_series[i], lip_series[(i + 1) % n_outer],
                                      (255, 0, 0), 5)
                         else:
+                            # 内唇：j 是内唇列表内的下标，闭合也只在内唇内
+                            j = i - n_outer
                             cv2.circle(matrix, lip_series[i], 5, (0, 255, 0), -1)
-                            cv2.line(matrix, lip_series[i], lip_series[(i + 1) % len(self.lip_index_list_inner)],
+                            cv2.line(matrix, lip_series[i],
+                                     lip_series[n_outer + (j + 1) % n_inner],
                                      (0, 255, 0), 5)
                     lip_frame_list.append(matrix)
             self.save_video(lip_frame_list, save_path, fps, h, w)
         except Exception as e:
-            print(f"lip_video.infer 错误: {e}")
+            logger.exception("lip_video.infer 处理失败: %s", e)
+        finally:
+            cap.release()

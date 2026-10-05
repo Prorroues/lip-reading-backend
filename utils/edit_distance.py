@@ -1,75 +1,57 @@
-from pypinyin import pinyin, Style
-from Levenshtein import distance
+# -*- coding: utf-8 -*-
+"""拼音相似度计算：把两个中文句子转成拼音后算编辑距离与相似度。
+
+返回语义（修正版）：
+    (similarity, edit_distance)
+    similarity     0~1 的相似度，越大越像，= 1 - 编辑距离 / 较长拼音串长度
+    edit_distance  两条拼音串之间的真实编辑距离（旧版返回值语义混乱，已修正）
+"""
 from typing import Tuple
+
+from Levenshtein import distance
+from pypinyin import Style, pinyin
+
+# 易混淆音归一化表：前后鼻音、l/n 不分
+_SOUND_MAP = (
+    ("in", "ing"),
+    ("en", "eng"),
+    ("an", "ang"),
+    ("un", "ung"),
+    ("l", "n"),
+)
 
 
 def normalize_pinyin(pinyin_str: str) -> str:
-    """
-    Normalize pinyin by handling similar sounds (front/back nasal, l/n).
-
-    Args:
-        pinyin_str (str): Pinyin string to normalize
-
-    Returns:
-        str: Normalized pinyin string
-    """
-    # Mapping for similar sounds
-    sound_map = {
-        'in': 'ing',  # Front nasal to back nasal
-        'en': 'eng',
-        'an': 'ang',
-        'un': 'ung',
-        'l': 'n'  # l to n
-    }
-
-    for src, dst in sound_map.items():
+    """对拼音串做易混淆音归一化（in/ing、en/eng、an/ang、un/ung、l/n）。"""
+    for src, dst in _SOUND_MAP:
         pinyin_str = pinyin_str.replace(src, dst)
-
     return pinyin_str
 
 
 def pinyin_similarity_score(sentence1: str, sentence2: str) -> Tuple[float, int]:
-    """
-    Calculate similarity score and edit distance between pinyin representations of two Chinese sentences,
-    accounting for similar sounds like front/back nasal and l/n.
+    """计算两个中文句子的拼音相似度与编辑距离。
 
     Args:
-        sentence1 (str): First Chinese sentence
-        sentence2 (str): Second Chinese sentence
+        sentence1: 第一个中文句子
+        sentence2: 第二个中文句子
 
     Returns:
-        Tuple[float, int]: Similarity score (0-1) and edit distance
+        (similarity, edit_distance)：相似度 0~1（越大越相似）和真实编辑距离
     """
-    # Convert sentences to pinyin without tones
-    pinyin1 = ''.join([item[0] for item in pinyin(sentence1, style=Style.NORMAL)])
-    pinyin2 = ''.join([item[0] for item in pinyin(sentence2, style=Style.NORMAL)])
+    pinyin1 = "".join(item[0] for item in pinyin(sentence1, style=Style.NORMAL))
+    pinyin2 = "".join(item[0] for item in pinyin(sentence2, style=Style.NORMAL))
 
-    # Normalize pinyin for similar sounds
-    pinyin1_normalized = normalize_pinyin(pinyin1)
-    pinyin2_normalized = normalize_pinyin(pinyin2)
+    p1 = normalize_pinyin(pinyin1)
+    p2 = normalize_pinyin(pinyin2)
 
-    # Calculate edit distance
-    edit_dist = distance(pinyin1_normalized, pinyin2_normalized)
+    edit_dist = distance(p1, p2)
+    max_len = max(len(p1), len(p2))
+    similarity = 1.0 if max_len == 0 else max(0.0, 1.0 - edit_dist / max_len)
 
-    # Calculate similarity score
-    max_len = max(len(pinyin1_normalized), len(pinyin2_normalized))
-    if max_len == 0:
-        similarity = 1.0
-    else:
-        similarity = max(0.0, 1.0 - (edit_dist / max_len))
-
-    similarity_show = similarity if similarity >= 0.5 else 1 - similarity
-    if similarity_show != similarity:
-        len_pinyin = len(pinyin1_normalized) if len(pinyin1_normalized) > len(pinyin2_normalized) else len(pinyin2_normalized)
-        len_pinyin = len_pinyin - edit_dist
-    else:
-        len_pinyin = edit_dist
-
-    return similarity_show, len_pinyin
+    return similarity, edit_dist
 
 
 if __name__ == "__main__":
-    # Example usage
     s1 = "你好世界"
     s2 = "你好地球"
     score, dist = pinyin_similarity_score(s1, s2)
