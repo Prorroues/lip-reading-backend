@@ -62,7 +62,7 @@ def cut_patch(img, landmarks, height, width, threshold=5):
 
 class VideoProcess:
     def __init__(self, mean_face_path="20words_mean_face.npy", crop_width=96, crop_height=96,
-                 start_idx=3, stop_idx=4, window_margin=12, convert_gray=True):
+                 start_idx=48, stop_idx=68, window_margin=12, convert_gray=True):
         self.reference = np.load(os.path.join(os.path.dirname(__file__), mean_face_path))
         self.crop_width = crop_width
         self.crop_height = crop_height
@@ -88,8 +88,10 @@ class VideoProcess:
             window_margin = min(self.window_margin // 2, frame_idx, len(landmarks) - 1 - frame_idx)
             smoothed_landmarks = np.mean([landmarks[x] for x in range(frame_idx - window_margin, frame_idx + window_margin + 1)], axis=0)
             smoothed_landmarks += landmarks[frame_idx].mean(axis=0) - smoothed_landmarks.mean(axis=0)
-            transformed_frame, transformed_landmarks = self.affine_transform(frame,smoothed_landmarks,self.reference,grayscale=self.convert_gray)
             try:
+                transformed_frame, transformed_landmarks = self.affine_transform(
+                    frame, smoothed_landmarks, self.reference, grayscale=self.convert_gray
+                )
                 patch = cut_patch(
                     transformed_frame,
                     transformed_landmarks[self.start_idx:self.stop_idx],
@@ -130,26 +132,26 @@ class VideoProcess:
         return landmarks
 
 
-    def affine_transform(self, frame, landmarks, reference, grayscale=False,
-                         target_size=(256, 256), reference_size=(256, 256), stable_points=(0, 1, 2, 3),
+    def affine_transform(self, frame, landmarks, reference, grayscale=True,
+                         target_size=(256, 256), reference_size=(256, 256),
+                         stable_points=(28, 33, 36, 39, 42, 45, 48, 54),
                          interpolation=cv2.INTER_LINEAR, border_mode=cv2.BORDER_CONSTANT, border_value=0):
-        if grayscale:
+        if grayscale and frame.ndim == 3:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        stable_reference = self.get_stable_reference(reference, reference_size, target_size)
+        if landmarks.shape[0] < 68:
+            raise Exception("need 68-point landmarks for lip-aligned crop")
+        stable_reference = self.get_stable_reference(reference, stable_points, reference_size, target_size)
         transform = self.estimate_affine_transform(landmarks, stable_points, stable_reference)
-        transformed_frame, transformed_landmarks = self.apply_affine_transform(frame, landmarks, transform, target_size, interpolation, border_mode, border_value)
-
+        if transform is None:
+            raise Exception("affine transform failed")
+        transformed_frame, transformed_landmarks = self.apply_affine_transform(
+            frame, landmarks, transform, target_size, interpolation, border_mode, border_value
+        )
         return transformed_frame, transformed_landmarks
 
 
-    def get_stable_reference(self, reference, reference_size, target_size):
-        # -- right eye, left eye, nose tip, mouth center
-        stable_reference = np.vstack([
-            np.mean(reference[36:42], axis=0),
-            np.mean(reference[42:48], axis=0),
-            np.mean(reference[31:36], axis=0),
-            np.mean(reference[48:68], axis=0)
-        ])
+    def get_stable_reference(self, reference, stable_points, reference_size, target_size):
+        stable_reference = np.vstack([reference[x] for x in stable_points])
         stable_reference[:, 0] -= (reference_size[0] - target_size[0]) / 2.0
         stable_reference[:, 1] -= (reference_size[1] - target_size[1]) / 2.0
         return stable_reference

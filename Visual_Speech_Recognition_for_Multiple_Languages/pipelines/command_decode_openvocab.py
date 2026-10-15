@@ -1,7 +1,7 @@
-"""Open-vocab overlap-gated decoder (2026-09-28 snapshot).
+"""UNUSED backup of overlap-gated decoder (2026-09-28 snapshot).
 
-This is the restored original path. Live file is command_decode.py.
-Closed-vocab snapshot is command_decode_closedvocab.py.
+Live infer() is CMLR news beam search only. Do not import from model.py.
+Scoring (not in use): nll/sqrt(len) - 3.0*hits; MAX_NLL=40; MIN_MARGIN=0.3
 """
 
 from __future__ import annotations

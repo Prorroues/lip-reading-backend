@@ -17,7 +17,8 @@ from ..espnet.nets.batch_beam_search import BatchBeamSearch
 from ..espnet.nets.lm_interface import dynamic_import_lm
 from ..espnet.nets.scorers.length_bonus import LengthBonus
 from ..espnet.nets.pytorch_backend.e2e_asr_transformer import E2E
-from .command_decode import pick_command
+# Home CTC pick_command is unused. Backups: command_decode.py /
+# command_decode_openvocab.py / command_decode_closedvocab.py
 
 
 class AVSR(torch.nn.Module):
@@ -61,14 +62,7 @@ class AVSR(torch.nn.Module):
                 enc_feats = self.model.encode(data[0].to(self.device), data[1].to(self.device))
             else:
                 enc_feats = self.model.encode(data.to(self.device))
-            greedy = ""
-            if getattr(self.model, "ctc", None) is not None:
-                command, greedy, _ranked = pick_command(enc_feats, self.model.ctc, self.token_list)
-                if command:
-                    return command
             nbest_hyps = self.beam_search(enc_feats, maxlenratio=self.maxlenratio)
-            if not nbest_hyps:
-                return greedy
             nbest_hyps = [h.asdict() for h in nbest_hyps[: min(len(nbest_hyps), 1)]]
             transcription = add_results_to_json(nbest_hyps, self.token_list)
             transcription = transcription.replace("▁", " ").strip()

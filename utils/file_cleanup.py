@@ -37,6 +37,7 @@ async def cleanup_loop(stop_event: asyncio.Event) -> None:
             settings.ROTATED_VIDEO_DIR,
             settings.GENERATE_VIDEOS_DIR,
             settings.GENERATE_IMAGES_DIR,
+            settings.GENERATE_MOUTH_DIR,
         ):
             total += _cleanup_dir(d, max_age)
         if total:

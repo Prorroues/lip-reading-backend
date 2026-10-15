@@ -15,7 +15,10 @@ import time
 import uuid
 from typing import Any
 
+from functools import partial
+
 from utils import settings
+from utils.file_name_extract import mouth_roi_path
 from utils.latest_recognition import attach_plain_text, set_latest
 
 logger = logging.getLogger("backend.video_tasks")
@@ -46,13 +49,14 @@ def _prune_tasks() -> None:
             _tasks.pop(tid, None)
 
 
-def create_task(file_path: str, image_name: str, video_name: str) -> str:
+def create_task(file_path: str, image_name: str, video_name: str, mouth_name: str = "") -> str:
     task_id = str(uuid.uuid4())
     _tasks[task_id] = {
         "status": "processing",
         "file_path": file_path,
         "image": image_name,
         "video": video_name,
+        "mouth": mouth_name,
         "src_age_estimate": "",
         "src_recognition_results": "",
         "error": None,
@@ -105,9 +109,11 @@ async def run_pipeline(
     lip_video / infer_sem。
     """
     loop = asyncio.get_running_loop()
+    mouth_path = mouth_roi_path(flip_video_path)
     results = {
         "image": os.path.basename(generate_image_path),
         "video": os.path.basename(generate_video_path),
+        "mouth": os.path.basename(mouth_path),
         "src_age_estimate": "",
         "src_recognition_results": "",
     }
@@ -116,7 +122,8 @@ async def run_pipeline(
         # VSR 是核心结果：异常直接向上抛，不写进 results
         async with state.infer_sem:
             vsr_text = await loop.run_in_executor(
-                state.executor, state.vsr.process_videos, flip_video_path
+                state.executor,
+                partial(state.vsr.process_videos, flip_video_path, mouth_dump_path=mouth_path),
             )
         vsr_text = (vsr_text or "").strip()
         # 空结果保留旧版提示文案（给 APP 看），但不会写入家居系统（见下方 set_latest 条件）

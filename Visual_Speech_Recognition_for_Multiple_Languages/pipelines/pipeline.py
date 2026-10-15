@@ -44,7 +44,12 @@ class InferencePipeline(torch.nn.Module):
         if lm_weight <= 0:
             rnnlm = None
 
-        self.dataloader = AVSRDataLoader(modality, speed_rate=input_v_fps/model_v_fps, detector=detector)
+        self.dataloader = AVSRDataLoader(
+            modality,
+            speed_rate=input_v_fps / model_v_fps,
+            detector=detector,
+            model_fps=model_v_fps,
+        )
         self.model = AVSR(
             modality, model_path, model_conf, rnnlm, rnnlm_conf,
             penalty, ctc_weight, lm_weight, beam_size, device,
@@ -72,9 +77,11 @@ class InferencePipeline(torch.nn.Module):
             return landmarks
 
 
-    def forward(self, data_filename, landmarks_filename=None):
+    def forward(self, data_filename, landmarks_filename=None, mouth_dump_path=None):
         assert os.path.isfile(data_filename), f"data_filename: {data_filename} does not exist."
         landmarks = self.process_landmarks(data_filename, landmarks_filename)
-        data = self.dataloader.load_data(data_filename, landmarks)
+        data = self.dataloader.load_data(
+            data_filename, landmarks, mouth_dump_path=mouth_dump_path
+        )
         transcript = self.model.infer(data)
         return transcript

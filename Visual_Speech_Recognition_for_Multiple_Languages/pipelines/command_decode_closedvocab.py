@@ -1,7 +1,14 @@
-"""Backup of closed-vocab home CTC decoder (saved 2026-10-01).
+"""UNUSED backup of closed-vocab home CTC decoder (saved 2026-10-01).
 
-Restore by copying this file over command_decode.py, then in model.py
+Live infer() is CMLR news beam search only. Do not import from model.py.
+
+Restore later: copy this file over command_decode.py, then in model.py
 return "未匹配到家居指令" when pick_command has no match (do not beam-search).
+
+Scoring (not in use):
+  score = raw_nll - 8.0*device_hits - 8.0*action_hits  (no sqrt(len))
+  close vs open need = 2.5
+  hinted-device window = top_score + max(6.0, 0.08*|top_score|)
 
 Closed-vocab home commands scored by visual CTC.
 Always pick from ACTIVE_COMMANDS. Do not emit greedy/news text.

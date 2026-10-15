@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from utils import settings                      # noqa: E402
 from utils.edit_distance import (               # noqa: E402
     normalize_pinyin, pinyin_similarity_score)
-from utils.file_name_extract import file_name_extract  # noqa: E402
+from utils.file_name_extract import file_name_extract, mouth_roi_path  # noqa: E402
 from utils.security import safe_resolve         # noqa: E402
 
 
@@ -25,6 +25,11 @@ class TestFileNameExtract:
         # Windows 反斜杠路径也要能正确提取文件名（旧版 split('/') 的 bug 已修）
         video_path, _, _ = file_name_extract(r"uploads\videos\abc123.mp4")
         assert "abc123" in video_path
+
+    def test_mouth_roi_path(self):
+        path = mouth_roi_path("uploads/videos/abc123.mp4")
+        assert "abc123" in path and path.endswith(".mp4")
+        assert "mouth_roi" in path.replace("\\", "/")
 
 
 class TestSafeResolve:

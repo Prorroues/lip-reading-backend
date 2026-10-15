@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 import aiohttp
+import httpx
 from fastapi import FastAPI
 
 # fastapi_infer 内部使用 from mivolo.predictor，需把 MiVOLO 目录加入 path
@@ -40,6 +41,12 @@ async def tai_middleware(app: FastAPI):
     app.state.http_session = aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=120)
     )
+    app.state.home_http = httpx.AsyncClient(
+        base_url=settings.HOME_UPSTREAM,
+        timeout=httpx.Timeout(120.0, connect=5.0),
+        follow_redirects=False,
+    )
+    logger.info("家居反代上游: %s", settings.HOME_UPSTREAM)
 
     ckpt_path = os.getenv("FACE_ESTIMATE_PATH")
     det_path = os.getenv("FACE_DETECTOR_PATH")
@@ -63,4 +70,5 @@ async def tai_middleware(app: FastAPI):
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         await app.state.http_session.close()
+        await app.state.home_http.aclose()
         app.state.executor.shutdown(wait=False)

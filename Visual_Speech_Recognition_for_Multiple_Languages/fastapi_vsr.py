@@ -29,13 +29,13 @@ class VSRInference:
             face_track=True,
         )
 
-    def process_videos(self, video_path, detector="mediapipe"):
+    def process_videos(self, video_path, detector="mediapipe", mouth_dump_path=None):
         """识别视频中的唇语。
 
         返回识别文本；没有识别到内容返回空字符串；
         识别失败抛异常（由调用方决定如何处理，不再把错误文本塞进结果里）。
         """
-        data = self.vsr.forward(video_path)
+        data = self.vsr.forward(video_path, mouth_dump_path=mouth_dump_path)
         if data is None:
             return ""
         text = str(data).strip()

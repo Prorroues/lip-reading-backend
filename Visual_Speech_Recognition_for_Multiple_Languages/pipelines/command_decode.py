@@ -1,8 +1,12 @@
-"""Live overlap-gated decoder restored 2026-10-01.
+"""UNUSED backup (2026-10-14). Live infer() is CMLR news beam search only.
 
-Home commands if CTC overlap is confident; otherwise infer() falls back
-to beam search (open vocab / news LM). Closed-vocab snapshot is
-command_decode_closedvocab.py.
+Overlap-gated home CTC decoder. Do not import from model.py.
+
+Scoring (not in use):
+  score = raw_nll / sqrt(len) - 3.0 * overlap_hits
+  accept if best_nll <= MAX_NLL(40.0) and margin >= MIN_MARGIN(0.3)
+Home vocab FAN_ON/OFF + LIGHT_ON/OFF + SCENE is kept here as backup only.
+Closed-vocab snapshot: command_decode_closedvocab.py
 """
 
 from __future__ import annotations

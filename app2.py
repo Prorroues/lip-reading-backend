@@ -11,18 +11,20 @@ import traceback
 from pathlib import Path
 
 import uvicorn
-from fastapi import (BackgroundTasks, Depends, FastAPI, File, Form,
+from fastapi import (APIRouter, BackgroundTasks, Depends, FastAPI, File, Form,
                      HTTPException, Query, Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from middlewares.init_lifespan import tai_middleware
-from pydantic_models.request_models import LLMInteractionModel
+from pydantic_models.request_models import AssistantChatModel, LLMInteractionModel
 from utils import settings, video_tasks
+from utils.dify_agent import run_assistant_chat
 from utils.dify_upload import run_workflow, upload_image_file
+from utils.home_gateway import register_home_proxy
 from utils.edit_distance import pinyin_similarity_score
 from utils.file_handler import UploadTooLargeError, save_file
-from utils.file_name_extract import file_name_extract
+from utils.file_name_extract import file_name_extract, mouth_roi_path
 from utils.latest_recognition import attach_plain_text, get_latest
 from utils.rotate_videos import rotate_video
 from utils.security import safe_resolve, verify_api_key
@@ -40,6 +42,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+register_home_proxy(app)
+vsr_router = APIRouter(prefix="/vsr", tags=["唇语"])
+
+
+@app.get("/", include_in_schema=False)
+async def public_root():
+    return RedirectResponse(url="/home/", status_code=307)
 
 
 def _error_response(status_code: int, message: str, exc: Exception | None = None) -> JSONResponse:
@@ -89,10 +98,10 @@ def _serve_media(directory: Path, filename: str) -> FileResponse:
     return FileResponse(path=file_path, media_type=media_type, filename=filename)
 
 
-@app.post("/upload/video", tags=["上传要检测的视频"], deprecated=True,
+@vsr_router.post("/upload/video", tags=["上传要检测的视频"], deprecated=True,
           dependencies=[Depends(verify_api_key)])
 async def upload_video(request: Request, file: UploadFile = File(...), direction: str = Form(...)):
-    """（已废弃，请用 /upload/videos）上传视频并同步完成识别。"""
+    """（已废弃，请用 /vsr/upload/videos）上传视频并同步完成识别。"""
     if direction not in ["front", "backend", "normal"]:
         return JSONResponse(status_code=400, content={"error": "direction 只能是 front/backend/normal"})
     bad = _check_upload_basic(request, file)
@@ -125,12 +134,12 @@ async def upload_video(request: Request, file: UploadFile = File(...), direction
         return _error_response(500, "识别处理失败，请查看服务器日志", e)
 
 
-@app.head("/upload/videos", tags=["上传地址探活（App 测试连接，不处理视频）"])
+@vsr_router.head("/upload/videos", tags=["上传地址探活（App 测试连接，不处理视频）"])
 async def upload_videos_head():
     return Response(status_code=200)
 
 
-@app.post("/upload/videos", tags=["上传要检测的视频(无参数版)"],
+@vsr_router.post("/upload/videos", tags=["上传要检测的视频(无参数版)"],
           dependencies=[Depends(verify_api_key)])
 async def upload_videos_simple(
     request: Request,
@@ -154,9 +163,10 @@ async def upload_videos_simple(
     flip_video_path = file_path
     image_name = os.path.basename(generate_image_path)
     video_name = os.path.basename(generate_video_path)
+    mouth_name = os.path.basename(mouth_roi_path(file_path))
 
     if not wait:
-        task_id = video_tasks.create_task(flip_video_path, image_name, video_name)
+        task_id = video_tasks.create_task(flip_video_path, image_name, video_name, mouth_name)
         background_tasks.add_task(
             video_tasks.process_task_background,
             request.app.state,
@@ -172,6 +182,7 @@ async def upload_videos_simple(
             "message": "文件已接收，识别处理中",
             "image": image_name,
             "video": video_name,
+            "mouth": mouth_name,
         }
 
     try:
@@ -183,7 +194,7 @@ async def upload_videos_simple(
         return _error_response(500, "识别处理失败，请查看服务器日志", e)
 
 
-@app.get("/upload/videos/status/{task_id}", tags=["查询异步上传识别结果"],
+@vsr_router.get("/upload/videos/status/{task_id}", tags=["查询异步上传识别结果"],
          dependencies=[Depends(verify_api_key)])
 async def upload_videos_status(task_id: str):
     task = video_tasks.get_task(task_id)
@@ -198,19 +209,21 @@ async def upload_videos_status(task_id: str):
             "error": task.get("error"),
             "image": task.get("image", ""),
             "video": task.get("video", ""),
+            "mouth": task.get("mouth", ""),
         }
     return {
         "status": "done",
         "task_id": task_id,
         "image": task.get("image", ""),
         "video": task.get("video", ""),
+        "mouth": task.get("mouth", ""),
         "src_age_estimate": task.get("src_age_estimate", ""),
         "src_recognition_results": task.get("src_recognition_results", ""),
         "plain_text": task.get("plain_text") or task.get("src_recognition_results", ""),
     }
 
 
-@app.get("/recognition/latest", tags=["获取最近一次唇语纯文本（家居服务拉取）"],
+@vsr_router.get("/recognition/latest", tags=["获取最近一次唇语纯文本（家居服务拉取）"],
          dependencies=[Depends(verify_api_key)])
 async def recognition_latest():
     latest = get_latest()
@@ -221,20 +234,27 @@ async def recognition_latest():
         "src_age_estimate": latest.get("src_age_estimate", ""),
         "image": latest.get("image", ""),
         "video": latest.get("video", ""),
+        "mouth": latest.get("mouth", ""),
         "updated_at": latest.get("updated_at", 0),
     }
 
 
-@app.get("/image/{filename}", tags=["获取检测的年龄性别图像"],
+@vsr_router.get("/image/{filename}", tags=["获取检测的年龄性别图像"],
          dependencies=[Depends(verify_api_key)])
 async def get_image(filename: str):
     return _serve_media(settings.GENERATE_IMAGES_DIR, filename)
 
 
-@app.get("/video/{filename}", tags=["获取生成的唇部视频"],
+@vsr_router.get("/video/{filename}", tags=["获取生成的唇部视频"],
          dependencies=[Depends(verify_api_key)])
 async def get_video(filename: str):
     return _serve_media(settings.GENERATE_VIDEOS_DIR, filename)
+
+
+@vsr_router.get("/mouth/{filename}", tags=["获取送进模型的嘴部裁切回放"],
+         dependencies=[Depends(verify_api_key)])
+async def get_mouth(filename: str):
+    return _serve_media(settings.GENERATE_MOUTH_DIR, filename)
 
 
 @app.get("/test", tags=["服务测试"])
@@ -242,14 +262,14 @@ async def test():
     return {"status": "ok", "message": "服务运行正常"}
 
 
-@app.get("/edit_distance", tags=["句子编辑距离得分计算"],
+@vsr_router.get("/edit_distance", tags=["句子编辑距离得分计算"],
          dependencies=[Depends(verify_api_key)])
 async def edit_distance(sentence1: str, sentence2: str):
     similarity, dist = await asyncio.to_thread(pinyin_similarity_score, sentence1, sentence2)
     return {"score": similarity, "distance": dist}
 
 
-@app.post("/llm_interaction", tags=["大模型数据总结，输出错误修复"],
+@vsr_router.post("/llm_interaction", tags=["大模型数据总结，输出错误修复"],
           dependencies=[Depends(verify_api_key)])
 async def llm_interaction(request: Request, llm_interaction_model: LLMInteractionModel):
     # image_path 只允许是产物目录内的文件名，杜绝任意文件被上传到第三方
@@ -274,6 +294,24 @@ async def llm_interaction(request: Request, llm_interaction_model: LLMInteractio
     if llm_results is False:
         raise HTTPException(status_code=502, detail="LLM workflow 执行失败")
     return llm_results
+
+
+@app.post("/assistant/chat", tags=["家居助手（Dify Agent）"],
+          dependencies=[Depends(verify_api_key)])
+async def assistant_chat(request: Request, body: AssistantChatModel):
+    session = request.app.state.http_session
+    try:
+        answer = await run_assistant_chat(session, body.text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        return JSONResponse(status_code=502, content={"error": "家居助手暂不可用", "detail": str(e)})
+    except Exception as e:
+        return _error_response(502, "家居助手暂不可用", e)
+    return {"answer": answer, "reply": answer}
+
+
+app.include_router(vsr_router)
 
 
 if __name__ == '__main__':

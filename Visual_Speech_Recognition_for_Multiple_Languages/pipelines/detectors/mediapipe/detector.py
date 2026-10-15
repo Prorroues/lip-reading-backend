@@ -4,34 +4,48 @@
 # Copyright 2021 Imperial College London (Pingchuan Ma)
 # Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
 
+"""Face Mesh → 68-point landmarks for official-style mouth crop.
+
+4-point FaceDetection backup:
+  pipelines/detectors/mediapipe/_backup_4point_2026-10-15/
+"""
+
 import cv2
 import mediapipe as mp
 import numpy as np
-import torchvision
+
+from ...data.video_io import load_video_rgb
+
+# MediaPipe Face Mesh 468 → dlib 68, same order as official mean-face / RetinaFace crop.
+_MP468_TO_DLIB68 = [
+    127, 234, 93, 132, 58, 172, 136, 149, 148, 152, 377, 378, 365, 397, 288, 323, 454,
+    70, 63, 105, 66, 107,
+    336, 296, 334, 293, 300,
+    168, 197, 5, 4, 75, 97, 2, 326, 305,
+    33, 160, 158, 133, 153, 144,
+    362, 385, 387, 263, 373, 380,
+    61, 40, 37, 0, 267, 270, 291, 321, 314, 17, 84, 91,
+    78, 82, 13, 312, 308, 317, 14, 87,
+]
 
 
 class LandmarksDetector:
-    """提取唇部对齐用关键点（MediaPipe FaceDetection）。"""
+    """提取 68 点关键点（MediaPipe Face Mesh），供按嘴唇轮廓对齐裁切。"""
 
     def __init__(self):
-        self.mp_face_detection = mp.solutions.face_detection
-        self.short_range_detector = self.mp_face_detection.FaceDetection(
-            min_detection_confidence=0.35, model_selection=0
-        )
-        self.full_range_detector = self.mp_face_detection.FaceDetection(
-            min_detection_confidence=0.35, model_selection=1
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.mesh = self.mp_face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=2,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
 
     def __call__(self, filename):
-        video_frames = torchvision.io.read_video(filename, pts_unit="sec")[0].numpy()
+        video_frames, _ = load_video_rgb(filename)
         frames = [self._prepare_frame(f) for f in video_frames]
-
-        # 眼镜近距离人脸用 short-range；full-range 会先抓住远处海报/旁人。
-        landmarks = self.detect(frames, self.short_range_detector)
-        if all(element is None for element in landmarks):
-            landmarks = self.detect(frames, self.full_range_detector)
-
-        return landmarks
+        return [self._detect_one(frame) for frame in frames]
 
     @staticmethod
     def _prepare_frame(frame: np.ndarray) -> np.ndarray:
@@ -44,85 +58,26 @@ class LandmarksDetector:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
         return np.ascontiguousarray(frame)
 
-    def detect(self, video_frames, detector):
-        landmarks = []
-        for frame in video_frames:
-            results = detector.process(frame)
-            if not results.detections:
-                landmarks.append(None)
-                continue
-            face_points = []
-            max_id, max_size = 0, 0
-            for idx, detected_faces in enumerate(results.detections):
-                bboxC = detected_faces.location_data.relative_bounding_box
-                ih, iw, ic = frame.shape
-                bbox = (
-                    int(bboxC.xmin * iw),
-                    int(bboxC.ymin * ih),
-                    int(bboxC.width * iw),
-                    int(bboxC.height * ih),
-                )
-                bbox_size = (bbox[2] - bbox[0]) + (bbox[3] - bbox[1])
-                if bbox_size > max_size:
-                    max_id, max_size = idx, bbox_size
-                lmx = [
-                    [
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(0).value
-                            ].x
-                            * iw
-                        ),
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(0).value
-                            ].y
-                            * ih
-                        ),
-                    ],
-                    [
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(1).value
-                            ].x
-                            * iw
-                        ),
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(1).value
-                            ].y
-                            * ih
-                        ),
-                    ],
-                    [
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(2).value
-                            ].x
-                            * iw
-                        ),
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(2).value
-                            ].y
-                            * ih
-                        ),
-                    ],
-                    [
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(3).value
-                            ].x
-                            * iw
-                        ),
-                        int(
-                            detected_faces.location_data.relative_keypoints[
-                                self.mp_face_detection.FaceKeyPoint(3).value
-                            ].y
-                            * ih
-                        ),
-                    ],
-                ]
-                face_points.append(lmx)
-            landmarks.append(np.array(face_points[max_id]))
-        return landmarks
+    def _detect_one(self, frame: np.ndarray):
+        results = self.mesh.process(frame)
+        if not results.multi_face_landmarks:
+            return None
+        ih, iw = frame.shape[:2]
+        best = None
+        best_size = -1
+        for face in results.multi_face_landmarks:
+            pts68 = self._to_dlib68(face, iw, ih)
+            xs, ys = pts68[:, 0], pts68[:, 1]
+            size = (xs.max() - xs.min()) + (ys.max() - ys.min())
+            if size > best_size:
+                best_size = size
+                best = pts68
+        return best
+
+    @staticmethod
+    def _to_dlib68(face_landmarks, iw, ih) -> np.ndarray:
+        pts = []
+        for idx in _MP468_TO_DLIB68:
+            lm = face_landmarks.landmark[idx]
+            pts.append([lm.x * iw, lm.y * ih])
+        return np.asarray(pts, dtype=np.float32)

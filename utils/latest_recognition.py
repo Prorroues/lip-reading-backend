@@ -17,9 +17,10 @@ _latest: dict[str, Any] = {
     "plain_text": "",
     "src_recognition_results": "",
     "src_age_estimate": "",
-    "image": "",
-    "video": "",
-    "updated_at": 0.0,
+        "image": "",
+        "video": "",
+        "mouth": "",
+        "updated_at": 0.0,
 }
 
 
@@ -42,6 +43,7 @@ def set_latest(results: dict[str, Any]) -> None:
         _latest["src_age_estimate"] = results.get("src_age_estimate") or ""
         _latest["image"] = results.get("image") or ""
         _latest["video"] = results.get("video") or ""
+        _latest["mouth"] = results.get("mouth") or ""
         _latest["updated_at"] = time.time()
 
 
